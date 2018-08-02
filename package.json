@@ -1,10 +1,11 @@
 {
   "name": "lil-repl",
   "version": "0.0.1",
-  "description": "A simple NodeJS REPL",
+  "description": "A simple NodeJS REPL skeleton. Includes command-line options, etc.",
   "main": "src/index.js",
+  "bin": {
+    "lil-repl": "bin/lil-repl"
+  },
   "author": "Tom Shaver <l3l_aze@yahoo.com>",
-  "dependencies": {
-    "debug": "^3.1.0"
-  }
+  "dependencies": {}
 }

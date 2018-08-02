@@ -13,13 +13,44 @@ const fs = require('fs')
 const path = require('path')
 const platform = require('os').platform()
 
-const name = 'lil-repl'
-const debug = platform !== 'android' ? require('./customDebug.js')(name) : require('debug')(name)
+// Needed for command-line parser, etc...
+const pj = require('../package.json')
 
-// Custom command setup
+// Debug setup
+const name = 'lil-repl'
+const version = pj.version || '1.0'
+const debug = require('./lil-debug.js')(name)
+
+// CLI setup
+const cli = require('./command-less')(pj, 'man')
+const options = cli.parse({
+  compressHistory: [ 'c', 'Remove repeat commands from history', 'boolean', true ],
+  debug: [ 'd', 'Enable debug mode without using environment var', 'boolean', false ],
+  fullErrors: [ 'e', 'Show full error messages.', 'boolean', false ],
+  help: [ 'h', 'Show this help message', 'boolean', false ],
+  historyFile: [ 'f', 'Command history file', 'path', '.history' ],
+  historyLimit: [ 'l', 'Command history limit', 'int', 1000 ],
+  saveAllCommands: [ 's', 'Save all commands in history', 'boolean', false ],
+  uniqueCommands: [ 'u', 'Only save unique commands in history', 'boolean', false ],
+  version: [ 'v', 'Show version number', 'boolean', false ]
+})
+
+// Fast stop without starting REPL if help or version message is being printed.
+if (options.version || options.help) {
+  if (options.version) {
+    console.info(`Version: ${version}\n`)
+  }
+
+  if (options.help) {
+    console.info(cli.help)
+  }
+
+  process.exit(0)
+}
+
+// REPL custom command setup
 const fullCommands = {
   'clear': 'clear the screen',
-  'quit': 'Exit the REPL',
   'exit': 'Exit the REPL'
 }
 const commands = Object.keys(fullCommands)
@@ -32,28 +63,8 @@ const server = repl.start({
   ignoreUndefined: true
 })
 
-function parseCommandLine () {
-  let args = process.argv.slice(2)
-  let options = {
-    uniqueHistory: [ 'u', 'Only sve unique history', 'boolean', false ],
-    debug: [ 'd', 'Debug mode', 'boolean', false ],
-    multilineErrors: [ 'm', 'Show regular multi-line errors with stack strace', 'boolean', false ],
-    saveAllCommands: [ 'a', 'Save failed commands too', 'boolean' false ],
-    historyFile: [ 'h', 'Command history file', 'path', '.node_repl_history' ],
-    historyLimit: [ 'l', 'Command history limit', 'number', 1000 ]
-  }
-  let i
-
-  debug(`args: [ ${args.join(', ')} ]`)
-
-  for (i = 0; i < args.length; i++) {
-    switch (args[ i ]) {
-      case '--unique-history': // Only keep unique history
-      case '-u':
-    }
-  }
-
-  return options
+if (options.debug) {
+  process.env.DEBUG = name
 }
 
 // Setup REPL
@@ -63,9 +74,9 @@ function init() {
   }
 
   debug('Intializing %s', name)
-  const replHistoryFile = path.join('.node_repl_history')
+  // debug('options: %s', JSON.stringify(options, null, 2))
 
-  let options = parseCommandLine()
+  const replHistoryFile = path.join(options.historyFile)
 
   server.eval = customEval
   server.completer = customAutocomplete
@@ -84,7 +95,7 @@ function init() {
     if (data.length > 0) {
 
       debug('Session history: %s', data.length)
-      debug('Ollllld history: %s', current.length)
+      debug('Old history: %s', typeof current !== 'undefined' ? current.length : 0)
 
 
       data = data.concat(current)
@@ -150,7 +161,6 @@ const customEval = function customEval (cmd, callback) {
       server.lines.push(cmd) // Save known command in history
       break
 
-    case 'quit':
     case 'exit':
       server.lines.push(cmd) // Save command in history when successful
       server.emit('exit') // Rather than process.exit, because that will just quit the program immediately.
@@ -187,14 +197,19 @@ const loadHistory = function loadHistory (file) {
   let line
   let lastLine
 
-  data = ('' + fs.readFileSync(file))
-    .split('\n')
-    .filter(line => line.trim())
-    .reverse()
+  if (fs.existsSync(file)) {
+    data = ('' + fs.readFileSync(file))
+      .split('\n')
+      .filter(line => line.trim())
+      .reverse()
 
-  debug('Loaded history: %s entries', data.length)
+    debug('Loaded history: %s entries', data.length)
 
-  return data
+    return data
+  } else {
+    console.info(`Failed to load history from ${file}: file not found`)
+    return []
+  }
 }
 
 init()
